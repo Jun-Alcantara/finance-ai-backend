@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Models\SourceOfIncome;
+use App\Models\Category;
 use App\Models\BankAccount;
 use App\Models\Income;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,10 +18,10 @@ class RecurringIncomeEndOfMonthTest extends TestCase
         // Create a user
         $user = User::factory()->create();
         
-        // Create a source of income
-        $source = SourceOfIncome::create([
+        // Create a category
+        $category = Category::create([
             'user_id' => $user->id,
-            'name' => 'Test Source',
+            'name' => 'Test Category',
         ]);
         
         // Create a bank account
@@ -33,7 +33,7 @@ class RecurringIncomeEndOfMonthTest extends TestCase
         
         // Create recurring income with end_of_month from Jan 31 to June 30
         $response = $this->actingAs($user)->postJson('/api/incomes', [
-            'source_of_income_id' => $source->id,
+            'category_id' => $category->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 5000.00,
             'remarks' => 'Monthly salary - end of month',

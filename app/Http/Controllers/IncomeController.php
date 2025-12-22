@@ -18,7 +18,7 @@ class IncomeController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Income::with(['sourceOfIncome', 'bankAccount'])
+        $query = Income::with(['category', 'bankAccount'])
             ->forUser($request->user()->id)
             ->orderBy('date', 'asc');
 
@@ -27,7 +27,7 @@ class IncomeController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('remarks', 'like', "%{$search}%")
-                    ->orWhereHas('sourceOfIncome', function ($q) use ($search) {
+                    ->orWhereHas('category', function ($q) use ($search) {
                         $q->where('name', 'like', "%{$search}%");
                     });
             });
@@ -92,7 +92,7 @@ class IncomeController extends Controller
                 $firstIncome = $income;
             }
 
-            return new IncomeResource($firstIncome->load(['sourceOfIncome', 'bankAccount']));
+            return new IncomeResource($firstIncome->load(['category', 'bankAccount']));
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
@@ -326,7 +326,7 @@ class IncomeController extends Controller
             $income->markAsReceived();
             DB::commit();
 
-            return new IncomeResource($income->fresh(['sourceOfIncome', 'bankAccount']));
+            return new IncomeResource($income->fresh(['category', 'bankAccount']));
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
