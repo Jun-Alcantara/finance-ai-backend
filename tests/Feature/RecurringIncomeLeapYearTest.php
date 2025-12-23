@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Models\Category;
+use App\Models\SourceOfIncome;
 use App\Models\BankAccount;
 use App\Models\Income;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,10 +18,10 @@ class RecurringIncomeLeapYearTest extends TestCase
         // Create a user
         $user = User::factory()->create();
         
-        // Create a category
-        $category = Category::create([
+        // Create a source of income
+        $sourceOfIncome = SourceOfIncome::create([
             'user_id' => $user->id,
-            'name' => 'Test Category',
+            'name' => 'Test Source',
         ]);
         
         // Create a bank account
@@ -33,7 +33,7 @@ class RecurringIncomeLeapYearTest extends TestCase
         
         // Create recurring income with end_of_month in a leap year (2024)
         $response = $this->actingAs($user)->postJson('/api/incomes', [
-            'category_id' => $category->id,
+            'source_of_income_id' => $sourceOfIncome->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 5000.00,
             'remarks' => 'Monthly salary - leap year',
@@ -85,10 +85,10 @@ class RecurringIncomeLeapYearTest extends TestCase
         // Create a user
         $user = User::factory()->create();
         
-        // Create a category
-        $category = Category::create([
+        // Create a source of income
+        $sourceOfIncome = SourceOfIncome::create([
             'user_id' => $user->id,
-            'name' => 'Test Category',
+            'name' => 'Test Source',
         ]);
         
         // Create a bank account
@@ -100,7 +100,7 @@ class RecurringIncomeLeapYearTest extends TestCase
         
         // Create recurring income on the 31st of each month
         $response = $this->actingAs($user)->postJson('/api/incomes', [
-            'category_id' => $category->id,
+            'source_of_income_id' => $sourceOfIncome->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 5000.00,
             'remarks' => 'Specific date 31',
