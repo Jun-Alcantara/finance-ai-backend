@@ -38,4 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Ledger routes
     Route::get('/ledger', [LedgerController::class, 'index']);
+
+    // Chat routes
+    Route::get('/chat/{sessionId}', [\App\Http\Controllers\ChatController::class, 'index']);
+    Route::post('/chat/send', [\App\Http\Controllers\ChatController::class, 'store']);
+    Route::post('/chat/typing', [\App\Http\Controllers\ChatController::class, 'typing']);
 });
