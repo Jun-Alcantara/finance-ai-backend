@@ -6,6 +6,9 @@ use App\Events\MessageSent;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Gemini\Laravel\Facades\Gemini;
+use Gemini\Data\Content;
+use Gemini\Enums\Role;
 
 class ChatController extends Controller
 {
@@ -25,9 +28,8 @@ class ChatController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            // 'session_id' is no longer required from input, we force it
             'content' => 'required|string',
-            'role' => 'required|in:user,assistant',
+            'role' => 'required|in:user,model',
             'metadata' => 'nullable|array',
         ]);
 
@@ -42,7 +44,33 @@ class ChatController extends Controller
 
         broadcast(new MessageSent($message))->toOthers();
 
-        broadcast(new \App\Events\UserTyping($sessionId))->toOthers();
+        if ($validated['role'] === 'user') {
+            // Broadcast AI typing indicator before generating response
+            broadcast(new \App\Events\AiTyping($sessionId))->toOthers();
+            
+            $sessionId = 'user-1';
+            $model = 'gemini-2.0-flash';
+
+            $messages = Message::whereSessionId($sessionId)
+                ->get();
+
+            $history = $messages->map(fn ($message) => Content::parse($message->content, $message->role))
+                ->toArray();
+            
+            $chat = Gemini::generativeModel(model: $model)
+                ->startChat(history: $history) ;
+
+            $response = $chat->sendMessage($message->content)->text();
+
+            $aiResopnse = Message::create([
+                'session_id' => $sessionId,
+                'content' => $response,
+                'role' => Role::MODEL,
+                'metadata' => [],
+            ]);
+        }
+
+        event(new \App\Events\MessageSent($aiResopnse));
 
         return new JsonResource($message);
     }

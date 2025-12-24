@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Gemini\Enums\Role;
 
 class Message extends Model
 {
@@ -14,4 +15,11 @@ class Message extends Model
     protected $casts = [
         'metadata' => 'array',
     ];
+
+    public function getRoleAttribute($value)
+    {
+        return $value == "user"
+            ? Role::USER
+            : Role::MODEL;
+    }
 }

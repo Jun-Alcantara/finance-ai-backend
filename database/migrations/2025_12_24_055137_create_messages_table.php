@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('session_id')->index();
             $table->text('content');
-            $table->enum('role', ['user', 'assistant']);
+            $table->enum('role', ['user', 'assistant', 'model']);
             $table->json('metadata')->nullable();
             $table->timestamps();
         });
