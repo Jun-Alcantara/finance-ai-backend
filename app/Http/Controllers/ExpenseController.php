@@ -14,11 +14,14 @@ class ExpenseController extends Controller
     /**
      * Display a listing of expenses.
      */
+    /**
+     * Display a listing of expenses.
+     */
     public function index(Request $request)
     {
         $query = Expense::with(['bankAccount'])
             ->forUser($request->user()->id)
-            ->orderBy('date', 'asc');
+            ->orderBy('due_date', 'asc'); // Default sort by due date
 
         // Apply search filter
         if ($request->has('search')) {
@@ -58,12 +61,13 @@ class ExpenseController extends Controller
             'bank_account_id' => 'required|exists:bank_accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'remarks' => 'nullable|string|max:255',
-            'date' => 'required|date',
+            'due_date' => 'required|date',
             'is_paid' => 'boolean',
+            'payment_date' => 'nullable|required_if:is_paid,true|date',
             'is_recurring' => 'boolean',
             'recurring_type' => 'nullable|required_if:is_recurring,true|in:start_of_month,end_of_month,specific_date',
             'recurring_day' => 'nullable|required_if:recurring_type,specific_date|integer|min:1|max:31',
-            'recur_until' => 'nullable|required_if:is_recurring,true|date|after:date',
+            'recur_until' => 'nullable|required_if:is_recurring,true|date|after:due_date',
         ]);
 
         $data['user_id'] = $request->user()->id;
@@ -71,6 +75,11 @@ class ExpenseController extends Controller
         // Capture is_paid intent but ensure we create as unpaid first to trigger markAsPaid logic properly
         $shouldBePaid = $data['is_paid'] ?? false;
         $data['is_paid'] = false;
+        
+        // Remove payment_date from initial creation data if we are going to use markAsPaid
+        // Actually markAsPaid sets it.
+        $paymentDate = $data['payment_date'] ?? null;
+        unset($data['payment_date']);
         
         $data['is_recurring'] = $data['is_recurring'] ?? false;
 
@@ -81,14 +90,14 @@ class ExpenseController extends Controller
                 $data['recurring_group_id'] = Expense::generateRecurringGroupId();
                 
                 // Create all recurring expenses up to recur_until date
-                $this->createRecurringExpenses($data, $shouldBePaid);
+                $this->createRecurringExpenses($data, $shouldBePaid, $paymentDate);
             } else {
                 // Create single expense
                 $expense = Expense::create($data);
                 
                 // If paid, update bank account balance (deduct)
                 if ($shouldBePaid) {
-                    $expense->markAsPaid();
+                    $expense->markAsPaid($paymentDate);
                 }
             }
 
@@ -97,7 +106,7 @@ class ExpenseController extends Controller
             // Return the first expense (the one with the original date)
             $firstExpense = Expense::where('user_id', $data['user_id'])
                 ->where('recurring_group_id', $data['recurring_group_id'] ?? null)
-                ->orderBy('date', 'asc')
+                ->orderBy('due_date', 'asc')
                 ->first();
 
             if (!$firstExpense) {
@@ -121,9 +130,9 @@ class ExpenseController extends Controller
     /**
      * Create recurring expenses up to the recur_until date.
      */
-    private function createRecurringExpenses(array $data, bool $shouldBePaid): void
+    private function createRecurringExpenses(array $data, bool $shouldBePaid, ?string $paymentDate = null): void
     {
-        $startDate = Carbon::parse($data['date'])->startOfDay();
+        $startDate = Carbon::parse($data['due_date'])->startOfDay();
         $endDate = Carbon::parse($data['recur_until'])->endOfDay();
         
         // Adjust start date based on recurring type
@@ -131,13 +140,20 @@ class ExpenseController extends Controller
 
         while ($currentDate->lte($endDate)) {
             $expenseData = $data;
-            $expenseData['date'] = $currentDate->format('Y-m-d');
+            $expenseData['due_date'] = $currentDate->format('Y-m-d');
             
             $expense = Expense::create($expenseData);
             
             // If paid, deduct from bank account
             if ($shouldBePaid) {
-                $expense->markAsPaid();
+                // For recurring, if we mark as paid, should we assume same payment date? 
+                // Usually recurring expenses are future, so auto-pay is tricky. 
+                // But if user says "Paid", we pay them. 
+                // Maybe payment_date should only apply to the FIRST one? 
+                // Or maybe payment_date implies "Paid on X". If I create 10 past expenses, maybe.
+                // If I create future expenses, they probably shouldn't be paid yet?
+                // Assuming user knows what they are doing.
+                $expense->markAsPaid($paymentDate);
             }
 
             // Calculate next occurrence
@@ -223,8 +239,9 @@ class ExpenseController extends Controller
             'bank_account_id' => 'exists:bank_accounts,id',
             'amount' => 'numeric|min:0.01',
             'remarks' => 'nullable|string|max:255',
-            'date' => 'date',
+            'due_date' => 'date',
             'is_paid' => 'boolean', 
+            'payment_date' => 'nullable|required_if:is_paid,true|date',
             'apply_to_future' => 'boolean'
         ]);
 
@@ -235,15 +252,17 @@ class ExpenseController extends Controller
         try {
             // Check if marking as paid
             $shouldBePaid = isset($data['is_paid']) && $data['is_paid'] === true && !$expense->is_paid;
+            $paymentDate = $data['payment_date'] ?? null;
             
             if ($shouldBePaid) {
                 $data['is_paid'] = false; // Prevent fill from setting is_paid=true directly
+                unset($data['payment_date']); // Handled by markAsPaid
             }
 
             if ($applyToFuture && $expense->is_recurring && $expense->recurring_group_id) {
                 // Get all future expenses
                 $futureExpenses = Expense::where('recurring_group_id', $expense->recurring_group_id)
-                    ->where('date', '>=', $expense->date)
+                    ->where('due_date', '>=', $expense->due_date)
                     ->get();
 
                 foreach ($futureExpenses as $futureExpense) {
@@ -254,7 +273,7 @@ class ExpenseController extends Controller
                     
                     if ($shouldBePaid) {
                         $futureExpense->save(); // Save details first as unpaid
-                        $futureExpense->markAsPaid(); // Then mark as paid
+                        $futureExpense->markAsPaid($paymentDate); // Then mark as paid
                     } else {
                         $futureExpense->save();
                     }
@@ -263,7 +282,7 @@ class ExpenseController extends Controller
                 $expense->fill($data);
                 if ($shouldBePaid) {
                     $expense->save();
-                    $expense->markAsPaid();
+                    $expense->markAsPaid($paymentDate);
                 } else {
                     $expense->save();
                 }
@@ -298,7 +317,7 @@ class ExpenseController extends Controller
             if ($applyToFuture && $expense->is_recurring && $expense->recurring_group_id) {
                 // Delete all future, UNPAID expenses
                 Expense::where('recurring_group_id', $expense->recurring_group_id)
-                    ->where('date', '>=', $expense->date)
+                    ->where('due_date', '>=', $expense->due_date)
                     ->where('is_paid', false) // Safety check: only delete unpaid
                     ->delete();
             } else {
@@ -327,9 +346,13 @@ class ExpenseController extends Controller
             return response()->json(['message' => 'Expense is already marked as paid.'], 422);
         }
 
+        $data = $request->validate([
+            'payment_date' => 'required|date',
+        ]);
+
         DB::beginTransaction();
         try {
-            $expense->markAsPaid();
+            $expense->markAsPaid($data['payment_date']);
             DB::commit();
 
             return response()->json($expense->fresh(['bankAccount']));

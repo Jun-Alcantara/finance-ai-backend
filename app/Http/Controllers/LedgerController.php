@@ -45,13 +45,16 @@ class LedgerController extends Controller
 
         // Fetch Expenses (Both Paid and Pending)
         $expenses = Expense::with(['bankAccount'])
-            ->where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
+            ->forUser($userId)
+            ->dateRange($startDate, $endDate) // Use the new scope which handles COALESCE
             ->get()
             ->map(function ($expense) {
+                // Determine effective date for display
+                $effectiveDate = $expense->payment_date ?? $expense->due_date;
+                
                 return [
                     'id' => $expense->id,
-                    'date' => $expense->date->format('Y-m-d'),
+                    'date' => $effectiveDate->format('Y-m-d'),
                     'description' => $expense->remarks ?: 'Expense',
                     'amount' => $expense->amount,
                     'type' => 'debit',

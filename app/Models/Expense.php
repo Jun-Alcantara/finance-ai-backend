@@ -22,7 +22,8 @@ class Expense extends Model
         'bank_account_id',
         'amount',
         'remarks',
-        'date',
+        'due_date',
+        'payment_date',
         'is_paid',
         'is_recurring',
         'recurring_type',
@@ -38,7 +39,8 @@ class Expense extends Model
      */
     protected $casts = [
         'amount' => 'decimal:2',
-        'date' => 'date',
+        'due_date' => 'date',
+        'payment_date' => 'date',
         'is_paid' => 'boolean',
         'is_recurring' => 'boolean',
         'recurring_day' => 'integer',
@@ -82,13 +84,18 @@ class Expense extends Model
     /**
      * Mark expense as paid and deduct from bank account balance.
      */
-    public function markAsPaid(): void
+    public function markAsPaid($paymentDate = null): void
     {
         if ($this->is_paid) {
             return;
         }
 
         $this->is_paid = true;
+        // If payment date is provided, use it, otherwise use current date if not already set?
+        // Actually, let's allow passing a date. if not passed, default to now or due_date? 
+        // User said: "which leads to the second field "Date of Payment" this is the actual date of payment"
+        // In markAsPaid, we should likely set it.
+        $this->payment_date = $paymentDate ?? now(); 
         $this->save();
 
         // Deduct from bank account balance
@@ -113,10 +120,13 @@ class Expense extends Model
 
     /**
      * Scope to filter by date range.
+     * Uses payment_date if paid, otherwise due_date.
      */
     public function scopeDateRange($query, $startDate, $endDate)
     {
-        return $query->whereBetween('date', [$startDate, $endDate]);
+        // We want to filter where the "Effective Date" is within range.
+        // Effective Date = COALESCE(payment_date, due_date)
+        return $query->whereRaw('COALESCE(payment_date, due_date) BETWEEN ? AND ?', [$startDate, $endDate]);
     }
 
     /**

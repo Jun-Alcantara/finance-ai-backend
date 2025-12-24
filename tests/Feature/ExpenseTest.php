@@ -21,7 +21,7 @@ class ExpenseTest extends TestCase
         $response = $this->actingAs($user)->postJson('/api/expenses', [
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
             'is_paid' => false,
         ]);
 
@@ -43,8 +43,9 @@ class ExpenseTest extends TestCase
         $response = $this->actingAs($user)->postJson('/api/expenses', [
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
             'is_paid' => true,
+            'payment_date' => '2025-01-01',
         ]);
 
         $response->assertStatus(201);
@@ -65,15 +66,18 @@ class ExpenseTest extends TestCase
             'user_id' => $user->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
             'is_paid' => false,
         ]);
 
-        $response = $this->actingAs($user)->postJson("/api/expenses/{$expense->id}/mark-as-paid");
+        $response = $this->actingAs($user)->postJson("/api/expenses/{$expense->id}/mark-as-paid", [
+            'payment_date' => '2025-01-05',
+        ]);
 
         $response->assertStatus(200);
         
         $this->assertTrue($expense->fresh()->is_paid);
+        $this->assertEquals('2025-01-05', $expense->fresh()->payment_date->format('Y-m-d'));
         $this->assertEquals(900, $bankAccount->fresh()->balance);
     }
 
@@ -85,14 +89,15 @@ class ExpenseTest extends TestCase
             'user_id' => $user->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
             'is_paid' => true,
+            'payment_date' => '2025-01-01',
         ]);
 
         $response = $this->actingAs($user)->putJson("/api/expenses/{$expense->id}", [
             'amount' => 200,
             'bank_account_id' => $bankAccount->id,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
         ]);
 
         $response->assertStatus(403);
@@ -106,8 +111,9 @@ class ExpenseTest extends TestCase
             'user_id' => $user->id,
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01',
+            'due_date' => '2025-01-01',
             'is_paid' => true,
+            'payment_date' => '2025-01-01',
         ]);
 
         $response = $this->actingAs($user)->deleteJson("/api/expenses/{$expense->id}");
@@ -124,7 +130,7 @@ class ExpenseTest extends TestCase
         $response = $this->actingAs($user)->postJson('/api/expenses', [
             'bank_account_id' => $bankAccount->id,
             'amount' => 100,
-            'date' => '2025-01-01', // Jan 1st
+            'due_date' => '2025-01-01', // Jan 1st
             'is_paid' => false,
             'is_recurring' => true,
             'recurring_type' => 'start_of_month',

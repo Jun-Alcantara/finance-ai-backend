@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\Income;
 use App\Models\SourceOfIncome;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,7 +46,8 @@ class LedgerTest extends TestCase
             'user_id' => $user->id,
             'bank_account_id' => $bank->id,
             'amount' => 200,
-            'date' => now()->subDays(3)->format('Y-m-d'),
+            'due_date' => now()->subDays(3)->format('Y-m-d'),
+            'payment_date' => now()->subDays(3)->format('Y-m-d'),
             'is_paid' => true,
         ]);
 
@@ -54,7 +56,7 @@ class LedgerTest extends TestCase
             'user_id' => $user->id,
             'bank_account_id' => $bank->id,
             'amount' => 100,
-            'date' => now()->subDays(1)->format('Y-m-d'),
+            'due_date' => now()->subDays(1)->format('Y-m-d'), // Pending
             'is_paid' => false,
         ]);
 
@@ -118,12 +120,13 @@ class LedgerTest extends TestCase
         // Future Paid Expense (e.g., Dec 31, 2025)
         $futureDate = '2025-12-31';
         
-        Expense::create([
+        $expense = Expense::create([
             'user_id' => $user->id,
             'bank_account_id' => $bank->id,
             'amount' => 100,
-            'date' => $futureDate,
             'is_paid' => true,
+            'due_date' => $futureDate,
+            'payment_date' => $futureDate,
         ]);
 
         // Range covering the date (Nov 21, 2025 to Jan 2, 2026)
